@@ -1,4 +1,4 @@
-package com.example.flutter_30_tips
+package com.axiphyl.preconsult
 
 import io.flutter.embedding.android.FlutterActivity
 

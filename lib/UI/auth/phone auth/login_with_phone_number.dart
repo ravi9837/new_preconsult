@@ -1,6 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_30_tips/UI/auth/phone%20auth/verify_code.dart';
+import 'package:preconsult_app/UI/auth/phone%20auth/verify_code.dart';
 import '../../../Utils/utils.dart';
 import '../../../widgets/round_button.dart';
 
@@ -35,7 +35,7 @@ class _LoginWithPhoneNumberState extends State<LoginWithPhoneNumber> {
               controller: phoneNumberController,
               keyboardType: TextInputType.phone,
               decoration: InputDecoration(labelText:"Mobile No.",
-                  hintText: "7897678956"
+                  hintText: "10 digits Mobile number"
               ),
             ),
             SizedBox(height: 80,),

@@ -1,34 +1,34 @@
 {
   "project_info": {
-    "project_number": "1017829002093",
-    "firebase_url": "https://flutterpr-795ad-default-rtdb.asia-southeast1.firebasedatabase.app",
-    "project_id": "flutterpr-795ad",
-    "storage_bucket": "flutterpr-795ad.appspot.com"
+    "project_number": "692451153183",
+    "firebase_url": "https://flowchart-f936f-default-rtdb.firebaseio.com",
+    "project_id": "flowchart-f936f",
+    "storage_bucket": "flowchart-f936f.appspot.com"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:1017829002093:android:2aac73ff3392583f56a864",
+        "mobilesdk_app_id": "1:692451153183:android:93ad45c784db1fb1cacc2a",
         "android_client_info": {
-          "package_name": "com.example.flutter_30_tips"
+          "package_name": "com.axiphyl.preconsult"
         }
       },
       "oauth_client": [
         {
-          "client_id": "1017829002093-bre4ovb15ip8rp6ibaca661ahr1n78pt.apps.googleusercontent.com",
+          "client_id": "692451153183-5oo32pdjaspr1s16lquav5oje130pn9m.apps.googleusercontent.com",
           "client_type": 3
         }
       ],
       "api_key": [
         {
-          "current_key": "AIzaSyC6o6S441VDPlp0HpiMNWYhmvzwRcTL-oM"
+          "current_key": "AIzaSyCabz7aH8YEn8eL6Gh-OX_I_zCq3agRRtY"
         }
       ],
       "services": {
         "appinvite_service": {
           "other_platform_oauth_client": [
             {
-              "client_id": "1017829002093-bre4ovb15ip8rp6ibaca661ahr1n78pt.apps.googleusercontent.com",
+              "client_id": "692451153183-5oo32pdjaspr1s16lquav5oje130pn9m.apps.googleusercontent.com",
               "client_type": 3
             }
           ]

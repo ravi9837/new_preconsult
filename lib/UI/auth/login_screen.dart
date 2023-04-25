@@ -1,12 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_30_tips/UI/auth/signup_screen.dart';
-import 'package:flutter_30_tips/tips2/userList.dart';
 import '../../Utils/utils.dart';
+import '../../homePage.dart';
 import '../../widgets/round_button.dart';
 import '../forgot_password.dart';
-import '../post_screen/mainscreen.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 
 class LoginScreen extends StatefulWidget {
@@ -24,14 +23,17 @@ class _LoginScreenState extends State<LoginScreen> {
   final passwordController = TextEditingController();
 
   final _auth = FirebaseAuth.instance ;
-
+  @override
+  void initState() {
+    Permission.microphone.request();
+    super.initState();
+  }
 
   @override
   void dispose() {
-    // TODO: implement dispose
-    super.dispose();
     emailController.dispose();
     passwordController.dispose();
+    super.dispose();
 
   }
 
@@ -43,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: emailController.text,
         password: passwordController.text.toString()).then((value){
       Navigator.pushReplacement(context,
-          MaterialPageRoute(builder: (context) => PostScreen())
+          MaterialPageRoute(builder: (context) => HomePage())
       );
       setState(() {
         loading = false ;
@@ -141,44 +143,13 @@ class _LoginScreenState extends State<LoginScreen> {
                   }
                 },
               ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text("Don't have an account?"),
-                  TextButton(onPressed: (){
-                    Navigator.push(context,
-                        MaterialPageRoute(
-                            builder:(context) => SignUpScreen())
-                    );
-                  },
-                      child: Text('Sign up'))
-                ],
-              ),
-                TextButton(onPressed: (){
-                  Navigator.push(context,
-                      MaterialPageRoute(
-                          builder:(context) => ForgotPasswordScreen())
-                  );
-                },
-                    child: Text('Forgot Password?')),
-              InkWell(
-                onTap: (){
-                  Navigator.push(context,
-                      MaterialPageRoute(builder: (context) => UserList(tips: '4')));
-                },
-                child: Container(
-                  height: 50,
-                  decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                    color: Colors.green
-                  ),
-                  child: Center(
-                    child: Text('Login with phone', style: TextStyle(
-                      color: Colors.white,
-                    ),),
-                  ),
-                ),
-              )
+              TextButton(onPressed: (){
+                Navigator.push(context,
+                    MaterialPageRoute(
+                        builder:(context) => ForgotPasswordScreen())
+                );
+              },
+                  child: Text('Forgot Password?')),
             ],
           ),
         ),
