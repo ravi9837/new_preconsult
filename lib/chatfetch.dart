@@ -2,9 +2,21 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 //import 'package:preconsult_app/patient_form.dart';
 import 'package:preconsult_app/widgets/round_button.dart';
+import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
+import 'package:record_mp3/record_mp3.dart';
+import 'audioController.dart';
+import 'package:translator/translator.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:aws_s3/aws_s3.dart';
 
 class ChatFetch extends StatefulWidget {
   const ChatFetch({Key? key,}) : super(key: key);
@@ -36,6 +48,23 @@ class _ChatFetchState extends State<ChatFetch> {
   int start=0;
   bool personal=true;
   final ScrollController _scrollController = ScrollController();
+  String? timestamp;
+  String? fullTimestamp;
+  late String recordFilePath;
+  final FirebaseStorage _storage = FirebaseStorage.instance;
+  AudioController audioController = Get.put(AudioController());
+  String audioURL = "";
+  int group=0;
+  int personalLength=0;
+  int socialLength=0;
+  int clinicalLength=0;
+  int familyLength=0;
+  int screeningLength=0;
+  int anemiaLength=0;
+  int referralLength=0;
+  int groupCheck=0;
+
+
 
 
   @override
@@ -47,11 +76,240 @@ class _ChatFetchState extends State<ChatFetch> {
         showProgressIndicator = false;
       });
     });
+    _getVideo();
     fetchQuestions();
+    startRecord();
+  }
+  Future<void> _getVideo() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker
+        .pickVideo(source: ImageSource.camera,
+      maxDuration: Duration(seconds: 20),
+     );
+
+    if (pickedFile != null) {
+      // Do something with the captured video
+    }
+  }
+
+  Future<String> translateText(String text) async {
+    final translator = GoogleTranslator();
+
+    try {
+      final translation =
+      await translator.translate(text, to: 'hi', from: 'en');
+      return translation.text;
+    } catch (e) {
+      // handle translation error
+      return 'Translation failed';
+    }
+  }
+
+  Future<String> transcribeFirebaseAudioByUrl(String audioUrl) async {
+    const apiKey = "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"; // Replace with your actual API key
+
+    // Download audio file from Firebase Storage to a temporary local file
+    final Directory tempDir = await getTemporaryDirectory();
+    final String tempFilePath = '${tempDir.path}/temp_audio.mp3'; // Change the file extension to match your audio file format
+    File audioFile = File(tempFilePath);
+    await FirebaseStorage.instance.refFromURL(audioUrl).writeToFile(audioFile);
+    print('tema'+tempFilePath);
+
+    // Transcribe audio file using Whisper-1 API
+    var url = Uri.https("api.openai.com", "v1/audio/transcriptions");
+    var request = http.MultipartRequest('POST', url);
+    request.headers.addAll(({"Authorization": "Bearer $apiKey"}));
+    request.fields["model"] = 'whisper-1';
+    request.fields["language"] = "en";
+    request.files.add(await http.MultipartFile.fromPath('file', tempFilePath));
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Center(
+          child: CircularProgressIndicator(),
+        );
+      },
+    );
+
+    var response = await request.send();
+    var newresponse = await http.Response.fromStream(response);
+    final responseData = json.decode(newresponse.body);
+
+    Navigator.of(context).pop();
+
+    return responseData['text'];
   }
 
 
+  String time(double secs) {
+    var duration = Duration(seconds: secs.round());
+    return [duration.inHours, duration.inMinutes % 60, duration.inSeconds % 60]
+        .map((seg) => seg.toString().padLeft(2, '0'))
+        .join(':');
+  }
 
+
+  Future<String> uploadFileToFirebaseStorage(String filePath) async {
+    File file = File(filePath);
+    String fileName = file.path.split('/').last;
+    Reference ref = _storage.ref().child('audio').child(fileName);
+    UploadTask uploadTask = ref.putFile(file);
+    TaskSnapshot snapshot = await uploadTask.whenComplete(() {});
+    String downloadURL = await snapshot.ref.getDownloadURL();
+    print('File uploaded to Firebase Storage. Download URL: $downloadURL');
+    return downloadURL;
+  }
+
+
+  // Future<String> uploadFileToS3Bucket(String filePath) async {
+  //   final file = File(filePath);
+  //   final fileName = file.path.split('/').last;
+  //
+  //   final s3 = S3(
+  //     region: 'your_s3_bucket_region',
+  //     credentials: AwsClientCredentials(
+  //       accessKey: 'AKIAQ6TQFXUEQ2HTFWYQ',
+  //       secretKey: 's7kDekS6+k2fqVm0kF/8+43/uXBJTp4f8zZMN9V/',
+  //     ),
+  //   );
+  //
+  //   final putObjectResponse = await s3.putObject(
+  //     bucketName: 'your_s3_bucket_name',
+  //     key: 'audio/$fileName',
+  //     bodyBytes: file.readAsBytesSync(),
+  //   );
+  //
+  //   final downloadUrl = '${putObjectResponse.uri.scheme}://${putObjectResponse.uri.host}/${putObjectResponse.key}';
+  //   print('File uploaded to S3 bucket. Download URL: $downloadUrl');
+  //   return downloadUrl;
+  // }
+
+
+
+  Future<bool> checkPermission() async {
+    if (!await Permission.microphone.isGranted) {
+      PermissionStatus status = await Permission.microphone.request();
+      if (status != PermissionStatus.granted) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void startRecord() async {
+    bool hasPermission = await checkPermission();
+    if (hasPermission) {
+      recordFilePath = await getFilePath();
+      RecordMp3.instance.start(recordFilePath, (type) {
+        setState(() {});
+      });
+    } else {
+      Permission.microphone.request();
+      startRecord();
+    }
+    setState(() {});
+  }
+
+
+  void stopRecord() async {
+    bool stop = RecordMp3.instance.stop();
+    audioController.end.value = DateTime.now();
+    audioController.calcDuration();
+    if (stop) {
+      audioController.isRecording.value = false;
+      audioController.isSending.value = true;
+      // await uploadFileToFirebaseStorage(recordFilePath);
+      // String downloadURL = await uploadFileToFirebaseStorage(
+      //     recordFilePath);
+      // Upload file to Firebase Storage and get the download URL
+      //
+      try{
+        print('Hello Srinagar');
+      String audioUrl = "https://www.uclass.psychol.ucl.ac.uk/Release2/Conversation/AudioOnly/wav/F_0111_9y6m_1.wav";
+      // String apiUrl = 'http://192.168.1.38:5000/cluster_speakers';
+      final url = Uri.http("192.168.1.33:5000","/cluster_speakers");
+      print(url);
+      Map<String, String> formData = {
+        "audio_url": "$audioUrl",
+      };
+      print(formData);
+        print('Hello Srinagar1');
+      final String requestBodyJson = json.encode({"audio_url": "https://www.uclass.psychol.ucl.ac.uk/Release2/Conversation/AudioOnly/wav/F_0111_9y6m_1.wav"});
+      print("URL: ${requestBodyJson}");
+      final response = await http.post(
+        url,
+        headers: <String, String>{
+          'Content-Type': 'application/json; charset=UTF-8',
+        },
+        body: requestBodyJson,
+      );
+
+      // final response = await http.post(Uri.parse(apiUrl), body: {"audio_url": audioUrl});
+      print("responsebody:${response.body}");
+
+      // final response = await http.post(url, headers: headers);
+        if (response.statusCode == 200) {
+          // Request successful
+          print(response.body);
+          String transcription = response.body; // Get the transcription from the response body
+          String translatedTranscription = await translateText(transcription);
+          print(translatedTranscription);
+          FirebaseFirestore.instance
+              .collection('preConsult')
+              .doc(userId)
+              .collection('patientData')
+              .doc(easyid)
+              .update({
+            'hindi_transcription': translatedTranscription,
+            'english_transcription': transcription,
+            // "audio_file_url" : downloadURL
+          });
+      } else {
+        // Request failed
+        print('Request failed with status: ${response.statusCode}.');
+      }
+      }catch (e) {
+        // An exception occurred while sending the request
+        print('Failed to send request: $e');
+      }
+      // Call the transcribeFirebaseAudioByUrl() function with the Firebase Storage download URL
+      // String transcription =  await transcribeFirebaseAudioByUrl(downloadURL);
+      // String translatedTranscription = await translateText(transcription);
+      // String translatedTranscription = await translateText(responseBody);
+      // print(translatedTranscription);
+
+      // FirebaseFirestore.instance
+      //     .collection('preConsult')
+      //     .doc(userId)
+      //     .collection('patientData')
+      //     .doc(easyid)
+      //     .update({
+      //   'hindi_transcription': translatedTranscription,
+      //   'english_transcription':transcription,
+      //   "audio_file_url" : downloadURL
+      // }
+      // );
+
+      // print(
+          // 'Transcription: $transcription'); // Print the transcription to console or use it as needed
+    }
+  }
+
+  int i = 0;
+
+  Future<String> getFilePath() async {
+    Directory storageDirectory = await getApplicationDocumentsDirectory();
+    String sdPath = "${storageDirectory.path}/'unique id'/record${DateTime.now().microsecondsSinceEpoch}.acc";
+
+
+    var d = Directory(sdPath);
+    if (!d.existsSync()) {
+      d.createSync(recursive: true);
+    }
+    return "$sdPath/patient_$easyid${DateTime.now().microsecondsSinceEpoch}.wav";
+  }
 
 
   Future<void> fetchQuestions() async {
@@ -99,7 +357,7 @@ class _ChatFetchState extends State<ChatFetch> {
     } else if (_age < 18 && _age >= 12) {
       dataKey = 'Adolescent';
     } else if (_age < 31 && _age >= 18) {
-      dataKey = 'Adult 18-30';
+      dataKey = 'ADULT (18Y - 30Y) Male';
     } else if (_age < 41 && _age >= 31 && gender=='male') {
       dataKey = 'ADULT (31Y - 40Y) Male';
     } else if (_age < 41 && _age >= 31 && gender=='female') {
@@ -145,6 +403,12 @@ class _ChatFetchState extends State<ChatFetch> {
         title: const Text(
           'PATIENT TAB',
         ),
+        actions: [
+          GestureDetector( onTap:(){
+            stopRecord();
+          },
+      child: Icon(Icons.settings))
+        ],
       ),
       body:showProgressIndicator
           ? Center(child: CircularProgressIndicator())
@@ -295,6 +559,7 @@ class _ChatFetchState extends State<ChatFetch> {
                         child: TextButton(
                           onPressed: () {
                             setState(() {
+                              group+=1;
                               String question = flowData[currentQuestionIndex]["text"];
                               String answer = flowData[currentQuestionIndex]["text"] == 'Gender' ? "Male" : "Yes";
                               qaList.add({'question': question, 'answer': answer});
@@ -348,6 +613,7 @@ class _ChatFetchState extends State<ChatFetch> {
                         child: TextButton(
                           onPressed: () {
                             setState(() {
+                              group+=1;
                               String question = flowData[currentQuestionIndex]["text"];
                               String answer = flowData[currentQuestionIndex]["text"] == 'Gender'?"Female":"No";
                               if (flowData[currentQuestionIndex]["text"] == 'Gender') {
@@ -393,7 +659,17 @@ class _ChatFetchState extends State<ChatFetch> {
                     ),
                   ],
                 ),
-              } else
+              }
+              // else if(flowData[currentQuestionIndex]["kind"] == 3)...{
+              //       groupCheck+=1;
+              //
+              //
+              //
+              // }
+
+
+
+              else
                 ...{
                   if(flowData[currentQuestionIndex]["text"] ==
                       "Proceed with questions")...{
@@ -413,7 +689,7 @@ class _ChatFetchState extends State<ChatFetch> {
                       title: 'SUBMIT',
                       loading: loading,
                       onTap: () async {
-                        //submitAnswers();
+                        submitAnswers();
                         setState(() {
                           loading = true;
                         });
@@ -524,6 +800,7 @@ class _ChatFetchState extends State<ChatFetch> {
                         IconButton(
                           onPressed: () {
                             setState(() {
+                              group+=1;
                               String question = flowData[currentQuestionIndex]["text"];
                               if (flowData[currentQuestionIndex]["text"] == 'Age') {
                                 String answer=( finalYearText + (finalMonthText / 12)).toString();
@@ -563,65 +840,56 @@ class _ChatFetchState extends State<ChatFetch> {
       ),
     );
   }
-  loadQuestions(){
-
+  void submitAnswers() async {
+    DateTime now = DateTime.now();
+    String formattedDate =
+    DateFormat('dd-MM-yyyy').format(now);
+    String formattedDateTime =
+    DateFormat('dd-MM-yyyy hh.mm.ss')
+        .format(now);
+    timestamp = formattedDate;
+    fullTimestamp = formattedDateTime;
+    final patientDataCollectionRef = FirebaseFirestore.instance
+        .collection('preConsult')
+        .doc(userId)
+        .collection('patientData')
+        .doc(easyid);
+    try {
+      await patientDataCollectionRef.set({
+        'fullTimestamp': fullTimestamp,
+        'timestamp': timestamp,
+        'easyid': easyid,
+        'qaList': qaList,
+      });
+      print('Data saved successfully.');
+    } catch (e) {
+      print('Error saving data: $e');
+    }
+    stopRecord();
+    // Show a success dialog
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Form Submitted'),
+          content: const Text('Your form has been submitted.'),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                // Navigator.push(
+                //     context,
+                //     MaterialPageRoute(
+                //         builder: (context) =>
+                //             PatientForm(easyid:easyid)));
+              },
+            ),
+          ],
+        );
+      },
+    );
+    setState(() {
+      loading = false;
+    });
   }
-  // void submitAnswers() async {
-  //   final patientDataCollectionRef = FirebaseFirestore.instance
-  //       .collection('preConsult')
-  //       .doc(userId)
-  //       .collection('patientData')
-  //       .doc(easyid);
-  //
-  //   // Create a new map to store the answers for this questionnaire
-  //   List<Map<String, dynamic>> questionnaireAnswers = [];
-  //
-  //   // Iterate over the entries in the 'answers' map and add each question and its answer to the 'questionnaireAnswers' map
-  //   for (final entry in answers.entries) {
-  //     final int questionIndex = int.tryParse(entry.key) ?? 0;
-  //     if (questionIndex < flowData.length) {
-  //       final Map<String, dynamic> answer = {
-  //         'question': flowData[questionIndex]['text'],
-  //         'answer': entry.value,
-  //       };
-  //       questionnaireAnswers.add(answer);
-  //     }
-  //   }
-  //
-  //   // Create a new document in the 'patientData' collection and set its data to the questionnaire answers
-  //   try {
-  //     await patientDataCollectionRef.update({
-  //       'questionnaireAnswers': questionnaireAnswers,
-  //     });
-  //     print('Data saved successfully.');
-  //   } catch (e) {
-  //     print('Error saving data: $e');
-  //   }
-  //
-  //   // Show a success dialog
-  //   showDialog(
-  //     context: context,
-  //     builder: (BuildContext context) {
-  //       return AlertDialog(
-  //         title: const Text('Form Submitted'),
-  //         content: const Text('Your form has been submitted.'),
-  //         actions: <Widget>[
-  //           TextButton(
-  //             child: const Text('OK'),
-  //             onPressed: () {
-  //               Navigator.push(
-  //                   context,
-  //                   MaterialPageRoute(
-  //                       builder: (context) =>
-  //                           PatientForm(easyid:easyid)));
-  //             },
-  //           ),
-  //         ],
-  //       );
-  //     },
-  //   );
-  //   setState(() {
-  //     loading = false;
-  //   });
-  // }
 }

@@ -46,6 +46,7 @@ dependencies:
   record_mp3: ^3.0.0
   carousel_slider:
   flutter_typeahead: ^4.3.7
+  aws_s3: ^0.1.1+hotfix.5
 
 
 dev_dependencies:

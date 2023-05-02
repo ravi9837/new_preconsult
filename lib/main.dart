@@ -19,10 +19,8 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'MedOnGo',
       theme: ThemeData(
-        primarySwatch: Colors.green,
-      ),
-      home: const SplashScreen()
-      );
+        primarySwatch: Colors.green),
+    home: const SplashScreen(),
+    );
   }
 }
-
